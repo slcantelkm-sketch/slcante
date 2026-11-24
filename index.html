@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AETHER // AI RESEARCH</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+
+    <!-- Three.js & Post Processing -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-main: #e0e0e0;
+            --text-dim: #666666;
+            --accent: #ffffff;
+            --font-display: 'Syne', sans-serif;
+            --font-body: 'Space Grotesk', sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            overflow-x: hidden;
+            width: 100vw;
+            min-height: 100vh;
+        }
+
+        /* WebGL Canvas */
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Grain Overlay (CSS Noise for extra texture) */
+        .grain-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 999;
+            opacity: 0.04;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        }
+
+        /* Layout */
+        main {
+            position: relative;
+            z-index: 1;
+            padding: 0 5vw;
+        }
+
+        section {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+        }
+
+        /* Typography */
+        h1, h2, h3 {
+            font-family: var(--font-display);
+            text-transform: uppercase;
+            line-height: 0.9;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-size: clamp(4rem, 12vw, 15rem);
+            font-weight: 800;
+            mix-blend-mode: exclusion;
+        }
+
+        h2 {
+            font-size: clamp(2rem, 5vw, 6rem);
+            margin-bottom: 2rem;
+            color: var(--accent);
+        }
+
+        p {
+            font-size: clamp(1rem, 1.5vw, 1.25rem);
+            line-height: 1.6;
+            max-width: 600px;
+            color: var(--text-dim);
+            margin-bottom: 2rem;
+        }
+
+        /* Components */
+        .hero-meta {
+            display: flex;
+            gap: 2rem;
+            margin-top: 2rem;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            padding-top: 1rem;
+            width: fit-content;
+        }
+
+        .grid-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: start;
+        }
+
+        @media (max-width: 768px) {
+            .grid-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 2rem;
+            transition: all 0.3s ease;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(5px);
+        }
+
+        .card:hover {
+            border-color: rgba(255,255,255,0.5);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            border: 1px solid var(--text-main);
+            color: var(--text-main);
+            text-decoration: none;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+            position: relative;
+            overflow: hidden;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--text-main);
+            transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+            z-index: -1;
+        }
+
+        .btn:hover {
+            color: var(--bg-color);
+        }
+
+        .btn:hover::before {
+            transform: translateX(100%);
+        }
+
+        /* Footer */
+        footer {
+            padding: 4rem 5vw;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .footer-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            margin-left: 2rem;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: var(--text-main);
+        }
+
+        /* Utility */
+        .spacer { height: 10vh; }
+        
+        /* Loading State */
+        #loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 10000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            transition: opacity 0.5s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader">INITIALIZING NEURAL CORE...</div>
+    <div class="grain-overlay"></div>
+    <div id="canvas-container"></div>
+
+    <main>
+        <!-- Hero Section -->
+        <section id="hero">
+            <h1>Aether<br>Intelligence</h1>
+            <div class="hero-meta">
+                <span>System v.4.0.2</span>
+                <span>Status: Online</span>
+                <span>Latency: 12ms</span>
+            </div>
+        </section>
+
+        <!-- Capabilities Section -->
+        <section id="capabilities">
+            <div class="grid-section">
+                <div>
+                    <h2>Возможности</h2>
+                    <p>Мы создаем архитектуры, которые выходят за рамки традиционных вычислений. Наши модели используют квантовую запутанность данных для предсказания паттернов до их возникновения.</p>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="card">
+                        <h3>01. Генеративная Топология</h3>
+                        <p>Создание многомерных структур данных в реальном времени с использованием raymarching алгоритмов.</p>
+                    </div>
+                    <div class="card">
+                        <h3>02. Нейро-Синтез</h3>
+                        <p>Объединение семантических слоев для достижения сверхчеловеческого понимания контекста.</p>
+                    </div>
+                    <div class="card">
+                        <h3>03. Предиктивный Анализ</h3>
+                        <p>Моделирование будущих состояний системы с точностью до 99.9% на основе байесовских сетей.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Research Section -->
+        <section id="research">
+            <h2>Исследования</h2>
+            <div class="grid-section">
+                <div class="card" style="height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <h3>Проект "Оракул"</h3>
+                        <p>Разработка автономного агента, способного принимать этические решения в условиях неопределенности.</p>
+                    </div>
+                    <a href="#" class="btn">Читать отчет</a>
+                </div>
+                <div class="card" style="height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <h3>Протокол "Эхо"</h3>
+                        <p>Исследование рекурсивных нейронных сетей и их способности к самообучению без внешнего надзора.</p>
+                    </div>
+                    <a href="#" class="btn">Читать отчет</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA Section -->
+        <section id="cta" style="align-items: center; text-align: center;">
+            <h2 style="font-size: clamp(3rem, 8vw, 10rem);">Будущее здесь</h2>
+            <p style="max-width: 400px; margin: 0 auto 3rem auto;">Присоединяйтесь к элите разработчиков, формирующих новую реальность.</p>
+            <a href="#" class="btn" style="padding: 1.5rem 4rem; font-size: 1.2rem;">Начать интеграцию</a>
+        </section>
+    </main>
+
+    <footer>
+        <div>
+            © 2026 Aether Intelligence Labs.<br>
+            All systems nominal.
+        </div>
+        <div class="footer-links">
+            <a href="#">GitHub</a>
+            <a href="#">Twitter</a>
+            <a href="#">Manifesto</a>
+        </div>
+    </footer>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+        // --- Configuration ---
+        const CONFIG = {
+            bgColor: new THREE.Color(0x050505),
+            accentColor: new THREE.Color(0xffffff),
+            ditherIntensity: 1.5
+        };
+
+        // --- Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        
+        // Orthographic camera for full-screen shader effect
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: false,
+            powerPreference: "high-performance"
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        // --- Shaders ---
+
+        // 1. Background Raymarching Shader
+        // Creates the gradient field and abstract shapes
+        const bgVertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = vec4(position, 1.0);
+            }
+        `;
+
+        const bgFragmentShader = `
+            uniform float uTime;
+            uniform vec2 uResolution;
+            uniform vec2 uMouse;
+            varying vec2 vUv;
+
+            // Simplex Noise Function
+            vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
+            float snoise(vec2 v){
+                const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                        -0.577350269189626, 0.024390243902439);
+                vec2 i  = floor(v + dot(v, C.yy) );
+                vec2 x0 = v -   i + dot(i, C.xx);
+                vec2 i1;
+                i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+                vec4 x12 = x0.xyxy + C.xxzz;
+                x12.xy -= i1;
+                i = mod(i, 289.0);
+                vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+                + i.x + vec3(0.0, i1.x, 1.0 ));
+                vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+                m = m*m ;
+                m = m*m ;
+                vec3 x = 2.0 * fract(p * C.www) - 1.0;
+                vec3 h = abs(x) - 0.5;
+                vec3 ox = floor(x + 0.5);
+                vec3 a0 = x - ox;
+                m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+                vec3 g;
+                g.x  = a0.x  * x0.x  + h.x  * x0.y;
+                g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+                return 130.0 * dot(m, g);
+            }
+
+            void main() {
+                vec2 st = gl_FragCoord.xy / uResolution.xy;
+                // Aspect ratio correction
+                st.x *= uResolution.x / uResolution.y;
+                
+                float time = uTime * 0.2;
+                
+                // Mouse interaction influence
+                vec2 mouseNorm = uMouse / uResolution;
+                float distToMouse = distance(st, mouseNorm * vec2(uResolution.x/uResolution.y, 1.0));
+                
+                // Raymarching-like density function
+                float noiseVal = snoise(st * 3.0 + time);
+                float noiseVal2 = snoise(st * 6.0 - time * 0.5);
+                
+                // Create flowing gradient field
+                float pattern = noiseVal * 0.5 + noiseVal2 * 0.25;
+                
+                // Add some "structure" lines
+                float lines = sin(st.x * 20.0 + pattern * 5.0) * sin(st.y * 20.0 + pattern * 5.0);
+                
+                // Combine
+                float intensity = smoothstep(0.2, 0.8, pattern + 0.2);
+                
+                // Color palette: Monochrome with slight blue tint in shadows
+                vec3 color1 = vec3(0.02, 0.02, 0.05); // Deep dark
+                vec3 color2 = vec3(0.1, 0.1, 0.15);   // Mid grey
+                vec3 color3 = vec3(0.9, 0.9, 0.95);   // Highlight
+                
+                vec3 finalColor = mix(color1, color2, intensity);
+                finalColor = mix(finalColor, color3, smoothstep(0.6, 0.9, lines * intensity));
+                
+                // Vignette
+                float vignette = 1.0 - length(gl_FragCoord.xy / uResolution.xy - 0.5) * 0.8;
+                finalColor *= vignette;
+
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+        // 2. Dithering Post-Processing Shader
+        // Applies Bayer Matrix Dithering to the rendered scene
+        const ditherVertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+
+        const ditherFragmentShader = `
+            uniform sampler2D tDiffuse;
+            uniform vec2 uResolution;
+            uniform float uIntensity;
+            varying vec2 vUv;
+
+            // Bayer Matrix 4x4
+            float bayer4x4(vec2 p) {
+                int x = int(mod(p.x, 4.0));
+                int y = int(mod(p.y, 4.0));
+                int index = x + y * 4;
+                float limit = 0.0;
+                
+                if (index == 0) limit = 1.0/16.0;
+                else if (index == 1) limit = 9.0/16.0;
+                else if (index == 2) limit = 3.0/16.0;
+                else if (index == 3) limit = 11.0/16.0;
+                else if (index == 4) limit = 13.0/16.0;
+                else if (index == 5) limit = 5.0/16.0;
+                else if (index == 6) limit = 15.0/16.0;
+                else if (index == 7) limit = 7.0/16.0;
+                else if (index == 8) limit = 4.0/16.0;
+                else if (index == 9) limit = 12.0/16.0;
+                else if (index == 10) limit = 2.0/16.0;
+                else if (index == 11) limit = 10.0/16.0;
+                else if (index == 12) limit = 16.0/16.0;
+                else if (index == 13) limit = 8.0/16.0;
+                else if (index == 14) limit = 14.0/16.0;
+                else if (index == 15) limit = 6.0/16.0;
+                
+                return limit;
+            }
+
+            void main() {
+                vec4 color = texture2D(tDiffuse, vUv);
+                
+                // Convert to grayscale luminance
+                float luminance = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+                
+                // Get Bayer threshold for this pixel
+                vec2 fragCoord = gl_FragCoord.xy;
+                float threshold = bayer4x4(fragCoord);
+                
+                // Apply dithering logic
+                // We map the luminance to a range and compare with threshold
+                float dithered = step(threshold, luminance);
+                
+                // Mix original color with pure black/white based on dither result
+                // This creates the high-contrast 1-bit look but preserves some color info if desired
+                // For strict monochrome:
+                vec3 finalColor = vec3(dithered);
+                
+                // Optional: Keep a tiny bit of original color for "cyber" feel? 
+                // Let's stick to strict monochrome for the requested style.
+                
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+        // --- Implementation ---
+
+        // 1. Background Plane
+        const bgGeometry = new THREE.PlaneGeometry(2, 2);
+        const bgMaterial = new THREE.ShaderMaterial({
+            vertexShader: bgVertexShader,
+            fragmentShader: bgFragmentShader,
+            uniforms: {
+                uTime: { value: 0 },
+                uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                uMouse: { value: new THREE.Vector2(0, 0) }
+            }
+        });
+        const bgMesh = new THREE.Mesh(bgGeometry, bgMaterial);
+        scene.add(bgMesh);
+
+        // 2. Post-Processing Chain
+        const composer = new EffectComposer(renderer);
+        
+        // Pass 1: Render the scene (background)
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        // Pass 2: Dithering Shader
+        const ditherPass = new ShaderPass({
+            vertexShader: ditherVertexShader,
+            fragmentShader: ditherFragmentShader,
+            uniforms: {
+                tDiffuse: { value: null },
+                uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                uIntensity: { value: CONFIG.ditherIntensity }
+            }
+        });
+        composer.addPass(ditherPass);
+
+        // --- Interaction & Animation ---
+
+        const mouse = new THREE.Vector2();
+        
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = window.innerHeight - e.clientY; // Flip Y for shader coords
+            
+            // Update shader uniforms
+            bgMaterial.uniforms.uMouse.value.set(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            renderer.setSize(width, height);
+            composer.setSize(width, height);
+            
+            bgMaterial.uniforms.uResolution.value.set(width, height);
+            ditherPass.uniforms.uResolution.value.set(width, height);
+        });
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const elapsedTime = clock.getElapsedTime();
+            bgMaterial.uniforms.uTime.value = elapsedTime;
+            
+            composer.render();
+        }
+
+        // Remove loader when ready
+        window.onload = () => {
+            setTimeout(() => {
+                const loader = document.getElementById('loader');
+                loader.style.opacity = '0';
+                setTimeout(() => loader.remove(), 500);
+                animate();
+            }, 1000);
+        };
+
+    </script>
+</body>
+</html>
